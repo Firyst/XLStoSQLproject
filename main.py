@@ -1,11 +1,11 @@
 import sqlite3
 import xlrd
+from datetime import date, timedelta
 
-filename = "3-0.xls"
 
 datatypes = {1: "TEXT", 2: "DOUBLE", 3: "TEXT"}
 
-print("XLS to SQL converter v0.1 by Ph.")
+print("XLS to SQL converter v0.2 by Ph.")
 
 def add_quotes(string):
     # костыль. честно.
@@ -52,24 +52,41 @@ class MySQLBase():
 
 
 def main():
+    filename = input("Enter XLS file name: ")
+    basename = input("Enter new base name: ")
     xlsfile = xlrd.open_workbook_xls(filename=filename, formatting_info=False)
     sheets = xlsfile.sheets()
-    print(len(sheets))
-    base = MySQLBase("test.db")
+    base = MySQLBase(basename)
     for s_id, sheet in enumerate(sheets):
         rows = list(sheet.get_rows())
         print(f"Adding sheet {s_id+1}/{len(sheets)}")
         new_table_columns = dict()
         for col_i in range(sheet.ncols):
-            new_table_columns[rows[0][col_i].value] = rows[1][col_i].ctype
+            cell = rows[1][col_i]
+            if cell.ctype == 3:
+                date_to_text = (date(1900, 1, 1) + timedelta(int(cell.value))).strftime('%d.%m.%Y')
+                cell.ctype = 1
+                cell.value = date_to_text
+
+            new_table_columns[rows[0][col_i].value] = cell.ctype
         base.add_table(sheet.name, new_table_columns)
 
         for row_i in range(1, sheet.nrows):
-            base.add_row(sheet.name, map(lambda x: x.value, rows[row_i]))
+            row = rows[row_i]
+            new_row = []
+            for cell in row:
+                # convert date if exists
+                if cell.ctype == 3:
+                    date_to_text = (date(1900, 1, 1) + timedelta(int(cell.value))).strftime('%d.%m.%Y')
+                    cell.ctype = 1
+                    cell.value = date_to_text
+                new_row.append(cell)
+            base.add_row(sheet.name, map(lambda x: x.value, new_row))
 
-    base.execute('INSERT or IGNORE INTO "Товар" VALUES ("a1", "b", "c", "d", "e", "f")')
-    base.cur.execute('SELECT * FROM "Магазин"')
-    print(base.cur.fetchall())
+
+    # base.cur.execute('SELECT * FROM "Магазин"')
+    # print(base.cur.fetchone())
+    print("Database saved.")
     base.close()
 
 
